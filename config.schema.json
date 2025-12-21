@@ -1,0 +1,72 @@
+{
+  "pluginAlias": "Suncalc2Platform",
+  "pluginType": "platform",
+  "name": "Suncalc-2",
+  "singular": true,
+  "description": "Configure your Suncalc-2 platform",
+  "headerDisplay": "<p>This version of the Suncalc platform has been rewritten to support recent versions of HomeKit and the Home app.</p><p>Instead of creating one custom accessory to hold all values (which is no longer natively supported), it creates one occupancy sensor for each Suncalc period, making it suitable for using with automations without requiring a separate custom Home app.  Multiple locations are supported, but must have unique names.</p>",
+  "footerDisplay": "<p>If you have ideas on how to improve this plugin, please feel free to <a href=\"https://github.com/egb116/homebridge-suncalc-2\" title=\"Open plugin Github page\" target=\"_blank\" rel=\"noreferrer noopener\" aria-label=\"Open the plugin's Github page in a new window\">fork and create a PR</a><p><p>Support via <a href=\"https://www.buymeacoffee.com/ericbowers/\" title=\"Buy Me a Coffee\" target=\"_blank\" rel=\"noreferrer noopener\" aria-label=\"Open www.buymeacoffee.com in a new window\">BuyMeACoffee</a><p>",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "instances": {
+        "type": "array",
+        "title": "Suncalc Instances",
+        "description": "Add one or more locations to monitor solar events.",
+        "items": {
+          "type": "object",
+          "title": "Location Instance",
+          "properties": {
+            "name": {
+              "type": "string",
+              "title": "Location Name",
+              "description": "Unique name for this location (e.g., Home, Cabin). This prefix will be added to all 14 sensors.",
+              "default": "Suncalc",
+              "required": true
+            },
+            "location": {
+              "type": "object",
+              "title": "Coordinates",
+              "description": "<p>Latitude and longitude for sun calculation<p><p><a href=\"https://www.gps-coordinates.net/\" title=\"https://www.gps-coordinates.net/\" target=\"_blank\" rel=\"noreferrer noopener\" aria-label=\"Open www.gps-coordinates.net in a new window\">Click here to open a site that can help you determine your coordinates</a>",
+              "properties": {
+                "lat": {
+                  "type": "number",
+                  "title": "Latitude",
+                  "minimum": -90,
+                  "maximum": 90
+                },
+                "lon": {
+                  "type": "number",
+                  "title": "Longitude",
+                  "minimum": -180,
+                  "maximum": 180
+                }
+              },
+              "required": [
+                "lat",
+                "lon"
+              ]
+            },
+            "offset": {
+              "type": "object",
+              "title": "Sunrise/Sunset Offset",
+              "description": "<p>Optional offsets in minutes, applied only to sunrise and sunset sensors.</p><p>For instance, if you want to trigger a scene to start 30 minutes before sunset, you can specify an sunsetStart offset of -30. This fires the trigger 30 minutes earlier than normal.<p>",
+              "properties": {
+                "sunriseEnd": {
+                  "type": "number",
+                  "title": "Sunrise End Offset (minutes)",
+                  "default": 0
+                },
+                "sunsetStart": {
+                  "type": "number",
+                  "title": "Sunset Start Offset (minutes)",
+                  "default": 0
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

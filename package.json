@@ -1,20 +1,46 @@
 {
-  "name": "homebridge-suncalc",
-  "version": "0.0.1",
-  "description": "Suncalc plugin for homebridge: https://github.com/nfarina/homebridge to trigger off sunset and sunrise",
-  "license": "MIT",
-  "keywords": [
-    "homebridge-plugin"
-  ],
-  "repository": "kcharwood/homebridge-suncalc",
-  "bugs": {
-    "url": "http://github.com/kcharwood/homebridge-suncalc/issues"
-  },
-  "engines": {
-    "node": ">=4.2.0",
-    "homebridge": ">=0.2.0"
+  "name": "homebridge-suncalc-2",
+  "version": "1.0.0",
+  "description": "Homebridge plugin for SunCalc",
+  "main": "index.js",
+  "scripts": {
+    "lint": "eslint .",
+    "test": "node tests/test.js"
   },
   "dependencies": {
-    "suncalc": "^1.7.0"
+    "suncalc": "^1.9.0"
+  },
+  "peerDependencies": {
+    "homebridge": "^1.6.0 || ^2.0.0-beta.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@eslint/json": "^0.14.0",
+    "eslint": "^9.39.1"
+  },
+  "engines": {
+    "homebridge": "^1.6.0 || ^2.0.0-beta.0",
+    "node": "^20.15.1 || ^22 || ^24"
+  },
+  "keywords": [
+    "homebridge-plugin",
+    "suncalc",
+    "sunrise",
+    "sunset",
+    "solar"
+  ],
+  "author": "Eric Bowers",
+  "license": "MIT",
+  "funding": {
+    "type": "buymeacoffee",
+    "url": "https://buymeacoffee.com/ericbowers"
+  },
+  "bugs": {
+    "url": "https://github.com/egb116/homebridge-suncalc-2/issues"
+  },
+  "homepage": "https://github.com/egb116/homebridge-suncalc-2#readme",
+  "homebridge": {
+    "pluginType": "platform",
+    "pluginAlias": "Suncalc2Platform"
   }
 }
