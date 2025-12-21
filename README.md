@@ -46,13 +46,13 @@ Triggering from a time relative to sunset/sunrise can be useful for light trigge
       "sunriseEnd" : 30,
       "sunsetStart" : -30
   },
-  "accessory": "Suncalc-2"
+  "platform": "Suncalc2Platform"
 }
 ```
 
 Fields:
 
-* `accessory` must be "Suncalc-2" (required).
-* `location` contains your location coordinates (required).
 * `name` is the name of the published accessory (required, unique).
+* `location` contains your location coordinates (required).
 * `offset` contains offset values in minutes of when that event should be fired for sunrise/sunset. (optional).
+* `platform` must be "Suncalc2Platform" (required).
