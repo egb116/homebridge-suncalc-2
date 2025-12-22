@@ -1,6 +1,6 @@
 {
   "name": "homebridge-suncalc-2",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Homebridge plugin for SunCalc",
   "main": "index.js",
   "scripts": {
@@ -24,6 +24,7 @@
   },
   "keywords": [
     "homebridge-plugin",
+    "homebridge-suncalc",
     "suncalc",
     "sunrise",
     "sunset",
