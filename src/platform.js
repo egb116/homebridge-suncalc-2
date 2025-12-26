@@ -2,17 +2,23 @@
 
 'use strict';
 
-// Import the accessory logic to be instantiated for each configured location
+/**
+ * Import the accessory logic. 
+ * This class handles the actual solar calculations and HomeKit services for a specific location.
+ */
 const { SuncalcAccessory } = require('./accessory');
 
-// Constants used for identifying the plugin and platform in Homebridge
+/**
+ * Plugin Constants
+ * These must match the 'pluginName' and 'platform' values defined in the package.json.
+ */
 const PLUGIN_NAME = 'homebridge-suncalc-2';
 const PLATFORM_NAME = 'Suncalc2Platform';
 
 /**
  * Suncalc2Platform
- * This class is the main entry point for the Homebridge platform plugin.
- * It manages the discovery, registration, and lifecycle of solar accessories.
+ * Main entry point for the Homebridge platform plugin.
+ * Handles the discovery, registration, and persistent lifecycle of solar accessories.
  */
 class Suncalc2Platform {
   constructor(log, config, api) {
@@ -20,18 +26,25 @@ class Suncalc2Platform {
     this.api = api;
     this.config = config || {};
 
-    /** * A map to track current accessories, keyed by their unique Homebridge UUID.
-     * Map<UUID, PlatformAccessory> 
+    /** * Accessory Cache
+     * A map to track current accessories, keyed by their unique Homebridge UUID.
+     * @type {Map<string, PlatformAccessory>} 
      */
     this.platformAccessories = new Map();
 
-    // Event listener: Triggered when Homebridge is shutting down to allow for cleanup
+    /**
+     * Lifecycle Event: Shutdown
+     * Triggered when Homebridge is stopping. Ensures we kill active timers to prevent memory leaks.
+     */
     this.api.on('shutdown', () => this._shutdown());
 
-    // Event listener: Triggered after Homebridge has finished loading its cache.
-    // This is the safest time to reconcile the config vs. the cached accessories.
-    this.api.on('didFinishLaunching', async() => {
-      this.log.debug('didFinishLaunching');
+    /**
+     * Lifecycle Event: Finished Launching
+     * Triggered after Homebridge restores cached accessories. 
+     * This is the standard point to reconcile user config with the physical accessory state.
+     */
+    this.api.on('didFinishLaunching', async () => {
+      this.log.debug('didFinishLaunching event occurred');
       try {
         await this._reconcileAccessories();
       } catch (err) {
@@ -42,8 +55,9 @@ class Suncalc2Platform {
 
   /**
    * REQUIRED BY HOMEBRIDGE: configureAccessory
-   * This method is called by Homebridge for every accessory it finds in its cache 
-   * (from previous runs). We store them in our Map so we can update or remove them later.
+   * Invoked by Homebridge for every accessory found in its persistent cache (disk).
+   * We store these in our Map so we can update them or prune them later.
+   * @param {PlatformAccessory} accessory
    */
   configureAccessory(accessory) {
     this.log.info(
@@ -53,65 +67,79 @@ class Suncalc2Platform {
   }
 
   /**
-   * _reconcileAccessories
-   * Compares the user's config.json against the cached accessories.
-   * 1. Creates new accessories if added to config.
-   * 2. Updates existing accessories if settings changed.
-   * 3. Removes accessories if they were deleted from config.
+   * Internal Method: reconcileAccessories
+   * Syncs the user's config.json with the HomeKit bridge.
+   * 1. Creates new accessories for new config entries.
+   * 2. Re-initializes existing accessories with updated settings.
+   * 3. Unregisters accessories that were removed from the config.
    */
   async _reconcileAccessories() {
-    // Support both a single object config or an 'instances' array for multiple locations
+    // Standardize config: Support a single object config OR the 'instances' array pattern.
     const configs = Array.isArray(this.config.instances) ?
       this.config.instances :
       [this.config];
 
-    // Track which UUIDs are still valid so we can delete the ones that aren't
+    // Used to track which cached accessories should survive this run
     const keepUuids = new Set();
 
     for (const [index, instanceConfig] of configs.entries()) {
-      // 1. Identify the instance name (defaulting to Suncalc-1, Suncalc-2, etc.)
+      // 1. Identify the instance name (defaults to Suncalc-1, Suncalc-2, etc.)
       const baseName = instanceConfig.name ?? `Suncalc-${index + 1}`;
 
-      // 2. Generate a stable, unique UUID based on the plugin and instance name.
-      // This ensures the same configuration always maps to the same HomeKit accessory.
+      // 2. Generate a stable, deterministic UUID. 
+      // This links the name in config.json to the same HomeKit ID every time.
       const uuid = this.api.hap.uuid.generate(`${PLUGIN_NAME}:${baseName}`);
       keepUuids.add(uuid);
 
       let accessory = this.platformAccessories.get(uuid);
 
       if (accessory) {
-        // CASE: Accessory already exists in cache
+        /**
+         * SCENARIO: Accessory is already in the cache.
+         */
         this.log.info(`Using cached accessory: ${baseName}`);
         
-        // Update the context property in case coordinates or offsets were modified
+        // If an instance exists (e.g. from a hot reload), clean up its timers first.
+        if (accessory._instance) {
+          this.log.debug(`[${baseName}] Cleaning up old instance for re-initialization`);
+          accessory._instance.cleanup();
+          accessory._instance = null;
+        }
+
+        // Pass the latest config into the accessory context for persistence.
         accessory.context.config = instanceConfig;
         this.api.updatePlatformAccessories([accessory]);
       } else {
-        // CASE: New accessory found in config that isn't in cache
+        /**
+         * SCENARIO: New accessory found in config (not in cache).
+         */
         this.log.info(`Creating new accessory: ${baseName}`);
         
         const accessoryName = `${baseName}`;
         accessory = new this.api.platformAccessory(accessoryName, uuid);
 
-        // Store configuration in context for persistence
+        // Save config to context so it survives a Homebridge restart.
         accessory.context.config = instanceConfig;
         this.platformAccessories.set(uuid, accessory);
 
         try {
-          // Register the new accessory with Homebridge
+          // Officially register the new accessory with the HomeKit bridge.
           this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
         } catch (err) {
-          // Handle edge cases where the accessory might already be known to the bridge
+          // Guard against "Already Bridged" errors if cache and bridge fall out of sync.
           if (err.message.includes('already bridged')) {
-            this.log.info(`Accessory already bridged, skipping registration...`);
+            this.log.debug(`Accessory already bridged, skipping registration step`);
           } else {
             this.log.error(`Error during accessory registration: ${err.message}`);
           }
         }
       }
 
-      // 3. Attach functional logic
-      // Link the physical accessory representation to the SuncalcAccessory class logic.
+      /**
+       * Link Functional Logic
+       * Instantiate the SuncalcAccessory class, which handles the solar logic/updating.
+       * We store this on the accessory object as `_instance`.
+       */
       if (!accessory._instance) {
         accessory._instance = new SuncalcAccessory(
           this.log,
@@ -122,9 +150,11 @@ class Suncalc2Platform {
       }
     }
 
-    // 4. Cleanup
-    // Loop through cached accessories; if their UUID isn't in 'keepUuids', the user 
-    // removed them from config.json, so we remove them from HomeKit.
+    /**
+     * Final Pruning
+     * Remove any accessories that exist in the Homebridge cache but are no longer 
+     * present in the user's config.json.
+     */
     for (const [uuid, accessory] of this.platformAccessories.entries()) {
       if (!keepUuids.has(uuid)) {
         this.log.info(`Removing obsolete accessory: ${accessory.displayName}`);
@@ -133,7 +163,7 @@ class Suncalc2Platform {
           this.platformAccessories.delete(uuid);
         } catch (err) {
           if (err.message.includes('Cannot find')) {
-            this.log.info(`Accessory already unbridged, skipping unregistration...`);
+            this.log.debug(`Accessory already unbridged, skipping unregistration step`);
           } else {
             this.log.error(`Error removing accessory ${accessory.displayName}: ${err.message}`);
           }
@@ -143,9 +173,8 @@ class Suncalc2Platform {
   }
 
   /**
-   * _shutdown
-   * Gracefully stop all active timers or intervals in the individual accessories
-   * when Homebridge process is terminated.
+   * Internal Method: shutdown
+   * Gracefully stops all active solar calculation timers when Homebridge closes.
    */
   _shutdown() {
     for (const accessory of this.platformAccessories.values()) {
