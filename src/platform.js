@@ -3,7 +3,7 @@
 'use strict';
 
 /**
- * Import the accessory logic. 
+ * Import the accessory logic.
  * This class handles the actual solar calculations and HomeKit services for a specific location.
  */
 const { SuncalcAccessory } = require('./accessory');
@@ -28,7 +28,7 @@ class Suncalc2Platform {
 
     /** * Accessory Cache
      * A map to track current accessories, keyed by their unique Homebridge UUID.
-     * @type {Map<string, PlatformAccessory>} 
+     * @type {Map<string, PlatformAccessory>}
      */
     this.platformAccessories = new Map();
 
@@ -40,10 +40,10 @@ class Suncalc2Platform {
 
     /**
      * Lifecycle Event: Finished Launching
-     * Triggered after Homebridge restores cached accessories. 
+     * Triggered after Homebridge restores cached accessories.
      * This is the standard point to reconcile user config with the physical accessory state.
      */
-    this.api.on('didFinishLaunching', async () => {
+    this.api.on('didFinishLaunching', async() => {
       this.log.debug('didFinishLaunching event occurred');
       try {
         await this._reconcileAccessories();
@@ -86,7 +86,7 @@ class Suncalc2Platform {
       // 1. Identify the instance name (defaults to Suncalc-1, Suncalc-2, etc.)
       const baseName = instanceConfig.name ?? `Suncalc-${index + 1}`;
 
-      // 2. Generate a stable, deterministic UUID. 
+      // 2. Generate a stable, deterministic UUID.
       // This links the name in config.json to the same HomeKit ID every time.
       const uuid = this.api.hap.uuid.generate(`${PLUGIN_NAME}:${baseName}`);
       keepUuids.add(uuid);
@@ -98,7 +98,7 @@ class Suncalc2Platform {
          * SCENARIO: Accessory is already in the cache.
          */
         this.log.info(`Using cached accessory: ${baseName}`);
-        
+
         // If an instance exists (e.g. from a hot reload), clean up its timers first.
         if (accessory._instance) {
           this.log.debug(`[${baseName}] Cleaning up old instance for re-initialization`);
@@ -114,8 +114,9 @@ class Suncalc2Platform {
          * SCENARIO: New accessory found in config (not in cache).
          */
         this.log.info(`Creating new accessory: ${baseName}`);
-        
+
         const accessoryName = `${baseName}`;
+        // eslint-disable-next-line new-cap
         accessory = new this.api.platformAccessory(accessoryName, uuid);
 
         // Save config to context so it survives a Homebridge restart.
@@ -152,7 +153,7 @@ class Suncalc2Platform {
 
     /**
      * Final Pruning
-     * Remove any accessories that exist in the Homebridge cache but are no longer 
+     * Remove any accessories that exist in the Homebridge cache but are no longer
      * present in the user's config.json.
      */
     for (const [uuid, accessory] of this.platformAccessories.entries()) {

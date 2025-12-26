@@ -89,9 +89,11 @@ class Service {
   getCharacteristic(type) {
     const target = typeof type === 'function' && type.UUID ? type.UUID : type;
     let char = this.characteristics.find(c => c.UUID === target);
-    
+
     if (!char && typeof type === 'function') {
-      char = new type();
+      // Alias to Uppercase to satisfy 'new-cap' linting rule
+      const CharacteristicConstructor = type;
+      char = new CharacteristicConstructor();
       this.characteristics.push(char);
     }
     return char;
@@ -105,7 +107,15 @@ class Service {
 
   /** Adds a new characteristic instance to the service */
   addCharacteristic(charOrClass) {
-    const instance = typeof charOrClass === 'function' ? new charOrClass() : charOrClass;
+    let instance;
+    if (typeof charOrClass === 'function') {
+      // Alias to Uppercase to satisfy 'new-cap' linting rule
+      const Constructor = charOrClass;
+      instance = new Constructor();
+    } else {
+      instance = charOrClass;
+    }
+
     this.characteristics.push(instance);
     return instance;
   }

@@ -45,10 +45,14 @@ const SENSOR_MODES = {
  * @returns {string|null} - Returns the key if valid, otherwise null.
  */
 function getServiceKeyFromSubtype(accessoryUUID, subtype) {
-  if (typeof subtype !== 'string') return null;
+  if (typeof subtype !== 'string') {
+    return null;
+  }
 
   const prefix = `${accessoryUUID}:`;
-  if (!subtype.startsWith(prefix)) return null;
+  if (!subtype.startsWith(prefix)) {
+    return null;
+  }
 
   const key = subtype.slice(prefix.length);
   return SUN_TIMES_META[key] ? key : null;
@@ -71,7 +75,7 @@ class SuncalcAccessory {
     // Configuration retrieval
     this.platformName = config.name || 'Suncalc';
     this.location = config.location; // Expects { lat: number, lon: number }
-    
+
     // Mode selection: Determine which sensors should be active
     this.mode = config.mode || 'full';
     this.enabledSensors = SENSOR_MODES[this.mode] || SENSOR_MODES.full;
@@ -80,25 +84,35 @@ class SuncalcAccessory {
     const previousMode = accessory.context?.mode;
     const modeChanged = !!previousMode && previousMode !== this.mode;
 
-    this.log.debug(`[${this.platformName}] DEBUG: previousMode='${previousMode}', currentMode='${this.mode}', modeChanged=${modeChanged}`);
+    this.log.debug(
+      `[${this.platformName}] DEBUG: previousMode='${previousMode}', ` +
+      `currentMode='${this.mode}', modeChanged=${modeChanged}`
+    );
 
     // Update persistent context
     accessory.context.mode = this.mode;
-    
-    // Optional offsets (in minutes) to shift specific solar events (useful for lighting automations)
+
+    // Optional offsets (in minutes) to shift specific solar events
+    // (useful for lighting automations)
     this.sunriseEndOffset = config.offset?.sunriseEnd || 0;
     this.sunsetStartOffset = config.offset?.sunsetStart || 0;
 
     // Storage for internal service/characteristic references
     this.sensors = {};
 
-    this.log.info(`[${this.platformName}] Mode: ${this.mode} | Sensors: ${this.enabledSensors.join(', ')}`);
+    this.log.info(
+      `[${this.platformName}] Mode: ${this.mode} | ` +
+      `Sensors: ${this.enabledSensors.join(', ')}`
+    );
 
     this.setupAccessoryInfo();
 
     // If the mode changed, we must remove old sensors that are no longer in the active preset
     if (modeChanged) {
-      this.log.info(`[${this.platformName}] Mode changed from '${previousMode}' to '${this.mode}'`);
+      this.log.info(
+        `[${this.platformName}] Mode changed from ` +
+        `'${previousMode}' to '${this.mode}'`
+      );
       this.pruneServicesIfNeeded();
     }
 
@@ -174,7 +188,10 @@ class SuncalcAccessory {
       this.sensors[key] = { service, timeChar };
     });
 
-    this.log.debug(`[${this.platformName}] DEBUG setupServices: Total accessory services: ${this.accessory.services.length}`);
+    this.log.debug(
+      `[${this.platformName}] DEBUG setupServices: ` +
+      `Total accessory services: ${this.accessory.services.length}`
+    );
   }
 
   /**
@@ -189,11 +206,13 @@ class SuncalcAccessory {
 
     // Resolve UUID for comparison (handles variations in HAP-NodeJS versions)
     const occupancySensorUUID = this.Service.OccupancySensor.UUID || this.Service.OccupancySensor;
-    
+
     const servicesToRemove = this.accessory.services.filter(service => {
       // Ignore non-occupancy sensors (like Accessory Information)
-      if (service.UUID !== occupancySensorUUID) return false;
-      
+      if (service.UUID !== occupancySensorUUID) {
+        return false;
+      }
+
       // If the service's subtype is not in our 'enabled' list, mark for removal
       return !service.subtype || !allowedSubtypes.has(service.subtype);
     });
@@ -205,7 +224,7 @@ class SuncalcAccessory {
       this.accessory.removeService(service);
     }
   }
- 
+
   /**
    * Main calculation logic.
    * 1. Updates solar event times.
@@ -219,7 +238,7 @@ class SuncalcAccessory {
     }
 
     const now = dateOverride || new Date();
-    
+
     // 1. Get raw solar times from Suncalc
     const sunDates = suncalc.getTimes(
       now,
@@ -229,10 +248,14 @@ class SuncalcAccessory {
 
     // 2. Apply user-defined offsets
     if (sunDates.sunriseEnd) {
-      sunDates.sunriseEnd = new Date(sunDates.sunriseEnd.getTime() + this.sunriseEndOffset * 60 * 1000);
+      sunDates.sunriseEnd = new Date(
+        sunDates.sunriseEnd.getTime() + (this.sunriseEndOffset * 60 * 1000)
+      );
     }
     if (sunDates.sunsetStart) {
-      sunDates.sunsetStart = new Date(sunDates.sunsetStart.getTime() + this.sunsetStartOffset * 60 * 1000);
+      sunDates.sunsetStart = new Date(
+        sunDates.sunsetStart.getTime() + (this.sunsetStartOffset * 60 * 1000)
+      );
     }
 
     // 3. Create a sorted timeline of events occurring today
@@ -264,7 +287,9 @@ class SuncalcAccessory {
 
     // 5. Update HomeKit characteristics
     Object.entries(this.sensors).forEach(([key, sensor]) => {
-      const timeStr = sunDates[key] instanceof Date ? sunDates[key].toLocaleTimeString() : 'N/A';
+      const timeStr = sunDates[key] instanceof Date ?
+        sunDates[key].toLocaleTimeString() :
+        'N/A';
       sensor.timeChar.updateValue(timeStr);
 
       // Only the currently active phase shows as "Occupied"
@@ -276,7 +301,10 @@ class SuncalcAccessory {
     });
 
     if (activeKey) {
-      this.log.info(`[${this.platformName}] Current Solar Period: ${SUN_TIMES_META[activeKey]?.name}`);
+      this.log.info(
+        `[${this.platformName}] Current Solar Period: ` +
+        `${SUN_TIMES_META[activeKey]?.name}`
+      );
     }
 
     // 6. Schedule next update at the exact moment of the next solar event

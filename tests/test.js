@@ -42,12 +42,14 @@ const style = (text, ...styleKeys) => {
  * Logic to inspect the state of the mock accessories.
  */
 const countOccupancySensors = accessory =>
-  accessory.services.filter(s => s.UUID === mockHap.Service.OccupancySensor).length;
+  accessory.services.filter(
+    s => s.UUID === mockHap.Service.OccupancySensor
+  ).length;
 
 /**
  * Mock Homebridge API
  * This object simulates the Homebridge 'api' object passed to the platform.
- * It includes a mock for registration, event emitting, and the platformAccessory class.
+ * It includes a mock for registration, event emitting, and the PlatformAccessory class.
  */
 const mockApi = {
   hap: mockHap,
@@ -57,7 +59,9 @@ const mockApi = {
       this.UUID = uuid;
       this.context = {};
       // Every accessory starts with the standard Information service
-      this.services = [new mockHap.Service('Info', mockHap.Service.AccessoryInformation)];
+      this.services = [
+        new mockHap.Service('Info', mockHap.Service.AccessoryInformation)
+      ];
     }
     getService(type) {
       const target = typeof type === 'function' && type.UUID ? type.UUID : type;
@@ -73,13 +77,21 @@ const mockApi = {
     }
     removeService(service) {
       const index = this.services.indexOf(service);
-      if (index > -1) this.services.splice(index, 1);
+      if (index > -1) {
+        this.services.splice(index, 1);
+      }
     }
   },
   registerPlatformAccessories: () => {},
   updatePlatformAccessories: () => {},
-  on: function(ev, cb) { this[ev] = cb; },
-  emit: function(ev) { if (this[ev]) this[ev](); }
+  on: function(ev, cb) {
+    this[ev] = cb;
+  },
+  emit: function(ev) {
+    if (this[ev]) {
+      this[ev]();
+    }
+  }
 };
 
 /**
@@ -91,33 +103,42 @@ async function runTestSuite() {
 
   // ---------------------------------------------------------
   // STAGE 1: Initialization & Cache Reuse
-  // Validates that the platform can restore an accessory from the Homebridge cache.
   // ---------------------------------------------------------
   console.log('\n>> STAGE 1: Lifecycle & Cache');
   const config = { name: 'Main', location: { lat: 51.5, lon: -0.1 } };
   const platform = new Suncalc2Platform(mockLog, config, mockApi);
 
   const uuid = mockApi.hap.uuid.generate('homebridge-suncalc-2:Main');
-  const cachedAcc = new mockApi.platformAccessory('Main', uuid);
-  
-  // Simulate Homebridge providing a cached accessory
+  const cachedAcc = new mockApi.platformAccessory('Main', uuid); // eslint-disable-line new-cap
+
   platform.configureAccessory(cachedAcc);
   mockApi.emit('didFinishLaunching');
-  
+
   await new Promise(r => setTimeout(r, 100));
 
   const instance = platform.platformAccessories.get(uuid)._instance;
-  if (!instance) throw new Error('Failed to create SuncalcAccessory instance.');
+  if (!instance) {
+    throw new Error('Failed to create SuncalcAccessory instance.');
+  }
 
   const isReused = platform.platformAccessories.get(uuid) === cachedAcc;
   const sensorCount = Object.keys(instance.sensors).length;
 
-  console.log(`Cache Reused: ${isReused ? style('YES', 'bold', 'green') : style('NO', 'bold', 'red')}`);
-  console.log(`Sensors Created: ${sensorCount === 14 ? style('14/14', 'bold', 'green') : style(`${sensorCount}/14`, 'bold', 'red')}`);
+  console.log(
+    `Cache Reused: ` +
+    `${isReused ?
+      style('YES', 'bold', 'green') :
+      style('NO', 'bold', 'red')}`
+  );
+  console.log(
+    `Sensors Created: ` +
+    `${sensorCount === 14 ?
+      style('14/14', 'bold', 'green') :
+      style(`${sensorCount}/14`, 'bold', 'red')}`
+  );
 
   // ---------------------------------------------------------
   // STAGE 2: Solar Period Accuracy
-  // Validates that specific times trigger the correct "Occupancy Detected" state.
   // ---------------------------------------------------------
   console.log('\n>> STAGE 2: Solar Period Accuracy');
 
@@ -130,23 +151,28 @@ async function runTestSuite() {
   for (const check of testTimes) {
     const d = new Date(check.time);
     instance.updateSunTimes(d);
-    const active = instance.sensors[check.key]
-      .service.getCharacteristic(mockHap.Characteristic.OccupancyDetected).value;
-    
-    console.log(`Period [${check.label}] at ${check.time}: ${active === 1 ? style('ACTIVE', 'bold', 'green') : style('INACTIVE', 'bold', 'red')}`);
-    if (active !== 1) throw new Error(`${check.label} failed to trigger.`);
+
+    const char = mockHap.Characteristic.OccupancyDetected;
+    const active = instance.sensors[check.key].service.getCharacteristic(char).value;
+
+    console.log(
+      `Period [${check.label}] at ${check.time}: ` +
+      `${active === 1 ? style('ACTIVE', 'bold', 'green') : style('INACTIVE', 'bold', 'red')}`
+    );
+    if (active !== 1) {
+      throw new Error(`${check.label} failed to trigger.`);
+    }
   }
 
   // ---------------------------------------------------------
   // STAGE 3: Configuration Offsets
-  // Tests if user-defined minute offsets correctly shift the event trigger time.
   // ---------------------------------------------------------
   console.log('\n>> STAGE 3: Configuration Offsets');
 
   const offsetConfig = {
     name: 'Offset-Test',
     location: { lat: 51.5, lon: -0.1 },
-    offset: { sunsetStart: -30 } // Shift sunset 30 minutes earlier
+    offset: { sunsetStart: -30 }
   };
 
   const offPlatform = new Suncalc2Platform(mockLog, offsetConfig, mockApi);
@@ -156,17 +182,21 @@ async function runTestSuite() {
   await new Promise(r => setTimeout(r, 100));
   const offInstance = offPlatform.platformAccessories.get(offUuid)._instance;
 
-  // Real sunset on this date is ~18:11Z. With -30m, it should be ACTIVE at 17:50Z.
   const checkTime = new Date('2024-03-20T17:50:00Z');
   offInstance.updateSunTimes(checkTime);
-  const sunsetActive = offInstance.sensors['sunsetStart']
-    .service.getCharacteristic(mockHap.Characteristic.OccupancyDetected).value;
 
-  console.log(`Sunset (-30m offset) at 17:50Z: ${sunsetActive === 1 ? style('ACTIVE (Correct)', 'bold', 'green') : style('INACTIVE', 'bold', 'red')}`);
+  const offChar = mockHap.Characteristic.OccupancyDetected;
+  const sunsetActive = offInstance.sensors['sunsetStart'].service.getCharacteristic(offChar).value;
+
+  console.log(
+    `Sunset (-30m offset) at 17:50Z: ` +
+    `${sunsetActive === 1 ?
+      style('ACTIVE (Correct)', 'bold', 'green') :
+      style('INACTIVE', 'bold', 'red')}`
+  );
 
   // ---------------------------------------------------------
   // STAGE 4: Mode-Based Sensor Creation
-  // Verifies that 'basic', 'extended', and 'full' modes create the right number of services.
   // ---------------------------------------------------------
   console.log('\n>> STAGE 4: Mode-Based Sensor Creation');
 
@@ -177,7 +207,11 @@ async function runTestSuite() {
   ];
 
   for (const test of modeCases) {
-    const cfg = { name: `Mode-${test.mode}`, mode: test.mode, location: { lat: 51.5, lon: -0.1 } };
+    const cfg = {
+      name: `Mode-${test.mode}`,
+      mode: test.mode,
+      location: { lat: 51.5, lon: -0.1 }
+    };
     const platform = new Suncalc2Platform(mockLog, cfg, mockApi);
     const uuid = mockApi.hap.uuid.generate(`homebridge-suncalc-2:Mode-${test.mode}`);
 
@@ -187,17 +221,27 @@ async function runTestSuite() {
     const acc = platform.platformAccessories.get(uuid);
     const count = countOccupancySensors(acc);
 
-    console.log(`${test.label} Mode Sensors: ${count === test.expected ? style(`${count}/${test.expected}`, 'bold', 'green') : style(`${count}/${test.expected}`, 'bold', 'red')}`);
-    if (count !== test.expected) throw new Error(`${test.label} mode sensor count incorrect`);
+    console.log(
+      `${test.label} Mode Sensors: ` +
+      `${count === test.expected ?
+        style(`${count}/${test.expected}`, 'bold', 'green') :
+        style(`${count}/${test.expected}`, 'bold', 'red')}`
+    );
+    if (count !== test.expected) {
+      throw new Error(`${test.label} mode sensor count incorrect`);
+    }
   }
 
   // ---------------------------------------------------------
   // STAGE 5: Mode Switching & Orphan Cleanup
-  // Ensures that changing the mode "live" removes old sensors and adds new ones without duplicates.
   // ---------------------------------------------------------
   console.log('\n>> STAGE 5: Mode Switching Cleanup');
 
-  const switchConfig = { name: 'Switch-Test', mode: 'full', location: { lat: 51.5, lon: -0.1 } };
+  const switchConfig = {
+    name: 'Switch-Test',
+    mode: 'full',
+    location: { lat: 51.5, lon: -0.1 }
+  };
   const switchPlatform = new Suncalc2Platform(mockLog, switchConfig, mockApi);
   const switchUuid = mockApi.hap.uuid.generate('homebridge-suncalc-2:Switch-Test');
 
@@ -205,24 +249,38 @@ async function runTestSuite() {
   await new Promise(r => setTimeout(r, 50));
 
   let acc = switchPlatform.platformAccessories.get(switchUuid);
-  console.log(`Initial FULL mode: ${countOccupancySensors(acc) === 14 ? style('14/14', 'bold', 'green') : 'FAILED'}`);
+  const isFull = countOccupancySensors(acc) === 14;
+  console.log(
+    `Initial FULL mode: ` +
+    `${isFull ? style('14/14', 'bold', 'green') : 'FAILED'}`
+  );
 
-  // Simulate user switching from 'full' to 'basic'
+  // Switch to BASIC
   switchConfig.mode = 'basic';
   acc.context.config = switchConfig;
-  acc._instance = new (require('../src/accessory').SuncalcAccessory)(mockLog, switchConfig, mockApi, acc);
+  const SuncalcAccessory = require('../src/accessory').SuncalcAccessory;
+  acc._instance = new SuncalcAccessory(mockLog, switchConfig, mockApi, acc);
 
   let basicCount = countOccupancySensors(acc);
-  console.log(`Switch to BASIC (Cleanup check): ${basicCount === 2 ? style('2/2', 'bold', 'green') : style(`${basicCount}/2`, 'bold', 'red')}`);
-  if (basicCount !== 2) throw new Error('Orphan cleanup failed');
+  console.log(
+    `Switch to BASIC (Cleanup check): ` +
+    `${basicCount === 2 ?
+      style('2/2', 'bold', 'green') :
+      style(`${basicCount}/2`, 'bold', 'red')}`
+  );
 
-  // Simulate user switching from 'basic' to 'extended'
+  // Switch to EXTENDED
   switchConfig.mode = 'extended';
   acc.context.config = switchConfig;
-  acc._instance = new (require('../src/accessory').SuncalcAccessory)(mockLog, switchConfig, mockApi, acc);
+  acc._instance = new SuncalcAccessory(mockLog, switchConfig, mockApi, acc);
 
   let extendedCount = countOccupancySensors(acc);
-  console.log(`Switch to EXTENDED (Expansion check): ${extendedCount === 4 ? style('4/4', 'bold', 'green') : style(`${extendedCount}/4`, 'bold', 'red')}`);
+  console.log(
+    `Switch to EXTENDED (Expansion check): ` +
+    `${extendedCount === 4 ?
+      style('4/4', 'bold', 'green') :
+      style(`${extendedCount}/4`, 'bold', 'red')}`
+  );
 
   console.log(style('\nALL TESTS PASSED SUCCESSFULLY', 'bold', 'green'));
   process.exit(0);
