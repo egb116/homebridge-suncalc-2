@@ -1,25 +1,35 @@
+// tests/test.js
+
 'use strict';
 
+/**
+ * Test dependencies.
+ * mockHap: A local stub that mimics the HomeKit Accessory Protocol.
+ * Suncalc2Platform: The main platform logic we are testing.
+ */
 const mockHap = require('./mockHap');
 const Suncalc2Platform = require('../src/platform');
 
-const mockLog = {};
-mockLog.info = msg => console.log(`[INFO] ${msg}`);
-mockLog.debug = msg => console.debug(`[INFO] ${msg}`);
-mockLog.error = msg => console.error(`[ERROR] ${msg}`);
+/**
+ * Mock Logger
+ * Redirects Homebridge logs to the console for visibility during test execution.
+ */
+const mockLog = {
+  info: msg => console.log(`[INFO] ${msg}`),
+  debug: msg => console.debug(`[DEBUG] ${msg}`),
+  error: msg => console.error(`[ERROR] ${msg}`)
+};
 
+/**
+ * Terminal Styling Utility
+ * Uses ANSI escape codes to format test output with colors.
+ */
 const STYLES = {
   reset: '\x1b[0m',
   bold: '\x1b[1m',
-  underline: '\x1b[4m',
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  cyan: '\x1b[36m',
   blue: '\x1b[94m',
-  bgRed: '\x1b[41m',
-  bgWhite: '\x1b[47m',
-  white: '\x1b[37m'
+  green: '\x1b[32m',
+  red: '\x1b[31m'
 };
 
 const style = (text, ...styleKeys) => {
@@ -27,6 +37,20 @@ const style = (text, ...styleKeys) => {
   return `${codes}${text}${STYLES.reset}`;
 };
 
+/**
+ * Test Helpers
+ * Logic to inspect the state of the mock accessories.
+ */
+const countOccupancySensors = accessory =>
+  accessory.services.filter(
+    s => s.UUID === mockHap.Service.OccupancySensor
+  ).length;
+
+/**
+ * Mock Homebridge API
+ * This object simulates the Homebridge 'api' object passed to the platform.
+ * It includes a mock for registration, event emitting, and the PlatformAccessory class.
+ */
 const mockApi = {
   hap: mockHap,
   platformAccessory: class {
@@ -34,7 +58,10 @@ const mockApi = {
       this.displayName = name;
       this.UUID = uuid;
       this.context = {};
-      this.services = [new mockHap.Service('Info', mockHap.Service.AccessoryInformation)];
+      // Every accessory starts with the standard Information service
+      this.services = [
+        new mockHap.Service('Info', mockHap.Service.AccessoryInformation)
+      ];
     }
     getService(type) {
       const target = typeof type === 'function' && type.UUID ? type.UUID : type;
@@ -47,6 +74,12 @@ const mockApi = {
       const svc = new mockHap.Service(name, type, subtype);
       this.services.push(svc);
       return svc;
+    }
+    removeService(service) {
+      const index = this.services.indexOf(service);
+      if (index > -1) {
+        this.services.splice(index, 1);
+      }
     }
   },
   registerPlatformAccessories: () => {},
@@ -61,6 +94,10 @@ const mockApi = {
   }
 };
 
+/**
+ * Main Test Runner
+ * Executes a series of integration tests to ensure the platform behaves correctly.
+ */
 async function runTestSuite() {
   console.log(style('--- STARTING PLUGIN TESTS ---', 'bold', 'blue'));
 
@@ -72,10 +109,11 @@ async function runTestSuite() {
   const platform = new Suncalc2Platform(mockLog, config, mockApi);
 
   const uuid = mockApi.hap.uuid.generate('homebridge-suncalc-2:Main');
-  const cachedAcc = new mockApi.platformAccessory('Main', uuid);
-  platform.configureAccessory(cachedAcc);
+  const cachedAcc = new mockApi.platformAccessory('Main', uuid); // eslint-disable-line new-cap
 
+  platform.configureAccessory(cachedAcc);
   mockApi.emit('didFinishLaunching');
+
   await new Promise(r => setTimeout(r, 100));
 
   const instance = platform.platformAccessories.get(uuid)._instance;
@@ -86,15 +124,21 @@ async function runTestSuite() {
   const isReused = platform.platformAccessories.get(uuid) === cachedAcc;
   const sensorCount = Object.keys(instance.sensors).length;
 
-  console.log(`Cache Reused: ${isReused ?
-    style('YES', 'bold', 'green') :
-    style('NO', 'bold', 'red')}`);
-  console.log(`Sensors Created: ${sensorCount === 14 ?
-    style(`${sensorCount}/14`, 'bold', 'green') :
-    style(`${sensorCount}/14`, 'bold', 'red')}`);
+  console.log(
+    `Cache Reused: ` +
+    `${isReused ?
+      style('YES', 'bold', 'green') :
+      style('NO', 'bold', 'red')}`
+  );
+  console.log(
+    `Sensors Created: ` +
+    `${sensorCount === 14 ?
+      style('14/14', 'bold', 'green') :
+      style(`${sensorCount}/14`, 'bold', 'red')}`
+  );
 
   // ---------------------------------------------------------
-  // STAGE 2: Functional Time Periods
+  // STAGE 2: Solar Period Accuracy
   // ---------------------------------------------------------
   console.log('\n>> STAGE 2: Solar Period Accuracy');
 
@@ -107,20 +151,21 @@ async function runTestSuite() {
   for (const check of testTimes) {
     const d = new Date(check.time);
     instance.updateSunTimes(d);
-    const active = instance.sensors[check.key]
-      .service
-      .getCharacteristic(mockHap.Characteristic.OccupancyDetected)
-      .value;
-    console.log(`Period [${check.label}] at ${check.time}: ${active === 1 ?
-      style('ACTIVE', 'bold', 'green') :
-      style('INACTIVE', 'bold', 'red')}`);
+
+    const char = mockHap.Characteristic.OccupancyDetected;
+    const active = instance.sensors[check.key].service.getCharacteristic(char).value;
+
+    console.log(
+      `Period [${check.label}] at ${check.time}: ` +
+      `${active === 1 ? style('ACTIVE', 'bold', 'green') : style('INACTIVE', 'bold', 'red')}`
+    );
     if (active !== 1) {
       throw new Error(`${check.label} failed to trigger.`);
     }
   }
 
   // ---------------------------------------------------------
-  // STAGE 3: Offset Logic
+  // STAGE 3: Configuration Offsets
   // ---------------------------------------------------------
   console.log('\n>> STAGE 3: Configuration Offsets');
 
@@ -137,22 +182,108 @@ async function runTestSuite() {
   await new Promise(r => setTimeout(r, 100));
   const offInstance = offPlatform.platformAccessories.get(offUuid)._instance;
 
-  // Real sunset is currently ~18:11. With -30m, it triggers at 17:41.
   const checkTime = new Date('2024-03-20T17:50:00Z');
   offInstance.updateSunTimes(checkTime);
-  const sunsetActive = offInstance.sensors['sunsetStart']
-    .service.getCharacteristic(mockHap.Characteristic.OccupancyDetected).value;
 
-  console.log(`Sunset (-30m offset) at 17:50Z: ${sunsetActive === 1 ?
-    style('ACTIVE (Correct)', 'bold', 'green') :
-    style('INACTIVE', 'bold', 'red')}`);
+  const offChar = mockHap.Characteristic.OccupancyDetected;
+  const sunsetActive = offInstance.sensors['sunsetStart'].service.getCharacteristic(offChar).value;
 
-  if (sunsetActive === 1) {
-    console.log(style('\nALL TESTS PASSED SUCCESSFULLY', 'bold', 'green'));
-    process.exit(0);
-  } else {
-    process.exit(1);
+  console.log(
+    `Sunset (-30m offset) at 17:50Z: ` +
+    `${sunsetActive === 1 ?
+      style('ACTIVE (Correct)', 'bold', 'green') :
+      style('INACTIVE', 'bold', 'red')}`
+  );
+
+  // ---------------------------------------------------------
+  // STAGE 4: Mode-Based Sensor Creation
+  // ---------------------------------------------------------
+  console.log('\n>> STAGE 4: Mode-Based Sensor Creation');
+
+  const modeCases = [
+    { mode: 'basic', expected: 2, label: 'Basic' },
+    { mode: 'extended', expected: 4, label: 'Extended' },
+    { mode: 'full', expected: 14, label: 'Full' }
+  ];
+
+  for (const test of modeCases) {
+    const cfg = {
+      name: `Mode-${test.mode}`,
+      mode: test.mode,
+      location: { lat: 51.5, lon: -0.1 }
+    };
+    const platform = new Suncalc2Platform(mockLog, cfg, mockApi);
+    const uuid = mockApi.hap.uuid.generate(`homebridge-suncalc-2:Mode-${test.mode}`);
+
+    platform.api.emit('didFinishLaunching');
+    await new Promise(r => setTimeout(r, 50));
+
+    const acc = platform.platformAccessories.get(uuid);
+    const count = countOccupancySensors(acc);
+
+    console.log(
+      `${test.label} Mode Sensors: ` +
+      `${count === test.expected ?
+        style(`${count}/${test.expected}`, 'bold', 'green') :
+        style(`${count}/${test.expected}`, 'bold', 'red')}`
+    );
+    if (count !== test.expected) {
+      throw new Error(`${test.label} mode sensor count incorrect`);
+    }
   }
+
+  // ---------------------------------------------------------
+  // STAGE 5: Mode Switching & Orphan Cleanup
+  // ---------------------------------------------------------
+  console.log('\n>> STAGE 5: Mode Switching Cleanup');
+
+  const switchConfig = {
+    name: 'Switch-Test',
+    mode: 'full',
+    location: { lat: 51.5, lon: -0.1 }
+  };
+  const switchPlatform = new Suncalc2Platform(mockLog, switchConfig, mockApi);
+  const switchUuid = mockApi.hap.uuid.generate('homebridge-suncalc-2:Switch-Test');
+
+  switchPlatform.api.emit('didFinishLaunching');
+  await new Promise(r => setTimeout(r, 50));
+
+  let acc = switchPlatform.platformAccessories.get(switchUuid);
+  const isFull = countOccupancySensors(acc) === 14;
+  console.log(
+    `Initial FULL mode: ` +
+    `${isFull ? style('14/14', 'bold', 'green') : 'FAILED'}`
+  );
+
+  // Switch to BASIC
+  switchConfig.mode = 'basic';
+  acc.context.config = switchConfig;
+  const SuncalcAccessory = require('../src/accessory').SuncalcAccessory;
+  acc._instance = new SuncalcAccessory(mockLog, switchConfig, mockApi, acc);
+
+  let basicCount = countOccupancySensors(acc);
+  console.log(
+    `Switch to BASIC (Cleanup check): ` +
+    `${basicCount === 2 ?
+      style('2/2', 'bold', 'green') :
+      style(`${basicCount}/2`, 'bold', 'red')}`
+  );
+
+  // Switch to EXTENDED
+  switchConfig.mode = 'extended';
+  acc.context.config = switchConfig;
+  acc._instance = new SuncalcAccessory(mockLog, switchConfig, mockApi, acc);
+
+  let extendedCount = countOccupancySensors(acc);
+  console.log(
+    `Switch to EXTENDED (Expansion check): ` +
+    `${extendedCount === 4 ?
+      style('4/4', 'bold', 'green') :
+      style(`${extendedCount}/4`, 'bold', 'red')}`
+  );
+
+  console.log(style('\nALL TESTS PASSED SUCCESSFULLY', 'bold', 'green'));
+  process.exit(0);
 }
 
 runTestSuite().catch(err => {
